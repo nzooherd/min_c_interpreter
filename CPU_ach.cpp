@@ -1,5 +1,6 @@
 #include"CPU_dec.h"
-CPU::CPU() : Functions(),Scopes(),Stacks(),layerNum(0){
+using namespace std;
+CPU::CPU() : Functions(),Scopes(),Stacks(),layerNum(0),ret('i'){
 }
 
 CPU::~CPU()
@@ -41,17 +42,15 @@ void CPU::callFunc(const string& func, int layer) {
 	stack<Var> cache;
 	int t_index = 0;
 
-	for (int index = 0; index < func.length; index++)
+	for (int index = 0; index < func.length(); index++)
 		if (func[index] == ',') {
 			element.push_back(func.substr(t_index + 1, index));
 			t_index = index;
 		}
 
 	for (vector<string>::iterator it = element.begin() + 1; it != element.end(); it++) {
-		if (*it == "?") {
-			t_var = &Stacks[layer].top();
-			Stacks[layer].pop();
-		}
+		if (*it == "?") 
+			t_var = &popStack(layer);
 		else
 			t_var = &getVar(*it, layer);
 		cache.push(*t_var);
@@ -101,7 +100,7 @@ Var CPU::getVar(const string&name, int layer) {
 	throw string("使用了未初始化的变量") + name;
 }
 void CPU::IF(const vector<string>& ops, int& start,int layer) {
-	Var* t_var = &Stacks[layer].top();Stacks[layer].pop();
+	Var* t_var = &popStack(layer);
 	bool ifFlag;
 	vector<string> nextOps(0);
 	if (t_var->type == 's')
@@ -142,7 +141,7 @@ void CPU::IF(const vector<string>& ops, int& start,int layer) {
 	run(nextOps, layer + 1);
 
 }
-void CPU::iniStack(stack<Var>& cache, int level) {
+void CPU::iniStack(stack<Var> & cache, int level) {
 	iniStack(level);
 	while (!cache.empty()) {
 		Stacks[layerNum-1].push(cache.top());
@@ -164,6 +163,13 @@ void CPU::iniStack(int level) {
 }
 void CPU::desStack() {
 	layerNum--;
+}
+Var CPU::popStack(int layer) {
+	if (Stacks[layer].empty())
+		throw "void 不能被运算。";
+	Var* var = &Stacks[layer].top();
+	Stacks[layer].pop();
+	return *var;
 }
 void CPU::WHILE(const vector<string>&ops, int &start, int layer) {
 	//while 分作两部分看
@@ -187,7 +193,7 @@ void CPU::WHILE(const vector<string>&ops, int &start, int layer) {
 	while (true) {
 		iniStack(Scopes[layer].level + 1);
 		run(part1, layer + 1);
-		t_var = &Stacks[layer].top(); Stacks[layer].pop();
+		t_var = &popStack(layer);
 		if(t_var->type == 's')
 			throw "不能从string转换成int型";
 		else if (t_var->type == 'i')
@@ -201,13 +207,12 @@ void CPU::WHILE(const vector<string>&ops, int &start, int layer) {
 		else break;
 	}
 }
-/////////////////
 Function* CPU::newFunc(const string& func) {
 	//@[f_name],[r_type][p_type][p_type],[p_name],[p_name],
 	vector<string> element(0);
 	int t_index = 0;
 
-	for (int index = 0; index < func.length; index++)
+	for (int index = 0; index < func.length(); index++)
 		if (func[index] == ',') {
 			element.push_back(func.substr(t_index + 1, index));
 			t_index = index;
@@ -217,6 +222,15 @@ Function* CPU::newFunc(const string& func) {
 	if (it == Functions.end()) {
 		Function* fp = &Function(vector<string>(element.begin() + 2, element.end()), element[1][0]);
 		Functions.insert(pair<string, Function>(signature, *fp));
+
+		//在函数中声明参数 
+		//在函数中给参数赋值
+		//第 i[1,n]个参数，类型element[1][i] 名称element[1+i]
+		for (int i = 1; i < element[1].length(); i++)
+		{
+			fp->ops.push_back(string("_") + element[1][i] + element[i + 1]);
+			fp->ops.push_back(string("=") + element[i + 1] + "?");
+		}
 		return fp;
 	}
 	else
@@ -224,6 +238,11 @@ Function* CPU::newFunc(const string& func) {
 	
 	
 }
+int CPU::firstInte(const string& op) {
+	for (int i = 1; i < op.length();i++)
+		if (op[i] == ',') return i;
+}
+/////////////////
 //////////////////////////
 void CPU::run(const vector<string>&ops, int layer) {
 	//操作: 调用	声明	赋值	+	-	*	/	%	$	#	if	else	
@@ -243,8 +262,7 @@ void CPU::run(const vector<string>&ops, int layer) {
 		case '_':
 			decVar(ops[i].substr(2), ops[i][1], layer);
 		case '=':
-			for (j = 0; i < ops[i].length; j++)
-				if (ops[i][j] == ',') break;
+			j = firstInte(ops[i]);
 			assVar(ops[i].substr(1, j), getVar(ops[i].substr(j + 1),layer), layer);
 		case 'i':IF(ops, i, layer + 1); break;
 		case 'e':throw "存在匹配不到if的else";break;
@@ -256,7 +274,78 @@ void CPU::run(const vector<string>&ops, int layer) {
 			else
 				Stacks[layer - 1].push(getVar("?", layer));
 			break;
-		//待实现:E N > < ( ) | & ! + - * / % $ #
+		case '+':
+			j = firstInte(ops[i]);
+			Stacks[layer].push(Plus(getVar(ops[i].substr(1, j), layer), getVar(ops[i].substr(j + 1), layer)));
+			break;
+		case '-':
+			j = firstInte(ops[i]);
+			Stacks[layer].push(Minus(getVar(ops[i].substr(1, j), layer), getVar(ops[i].substr(j + 1), layer)));
+			break;
+		case '*':
+			j = firstInte(ops[i]);
+			Stacks[layer].push(Mul(getVar(ops[i].substr(1, j), layer), getVar(ops[i].substr(j + 1), layer)));
+			break;
+		case '/':
+			j = firstInte(ops[i]);
+			Stacks[layer].push(Div(getVar(ops[i].substr(1, j), layer), getVar(ops[i].substr(j + 1), layer)));
+			break;
+		case '%':
+			j = firstInte(ops[i]);
+			Stacks[layer].push(Mod(getVar(ops[i].substr(1, j), layer), getVar(ops[i].substr(j + 1), layer)));
+			break;
+		case '$':
+			j = firstInte(ops[i]);
+			Stacks[layer].push(Connect(getVar(ops[i].substr(1, j), layer), getVar(ops[i].substr(j + 1), layer)));
+			break;
+		case '#':
+			j = firstInte(ops[i]);
+			Stacks[layer].push(Delete(getVar(ops[i].substr(1, j), layer), getVar(ops[i].substr(j + 1), layer)));
+			break;
+		case 'E':
+			j = firstInte(ops[i]);
+			Stacks[layer].push(Equal(getVar(ops[i].substr(1, j), layer), getVar(ops[i].substr(j + 1), layer)));
+			break;
+		case 'N':
+			j = firstInte(ops[i]);
+			Stacks[layer].push(NEqual(getVar(ops[i].substr(1, j), layer), getVar(ops[i].substr(j + 1), layer)));
+			break;
+		case '>':
+			j = firstInte(ops[i]);
+			Stacks[layer].push(Greater(getVar(ops[i].substr(1, j), layer), getVar(ops[i].substr(j + 1), layer)));
+			break;
+		case '<':
+			j = firstInte(ops[i]);
+			Stacks[layer].push(Less(getVar(ops[i].substr(1, j), layer), getVar(ops[i].substr(j + 1), layer)));
+			break;
+		case ')':
+			j = firstInte(ops[i]);
+			Stacks[layer].push(GEqual(getVar(ops[i].substr(1, j), layer), getVar(ops[i].substr(j + 1), layer)));
+			break;
+		case '(':
+			j = firstInte(ops[i]);
+			Stacks[layer].push(LEqual(getVar(ops[i].substr(1, j), layer), getVar(ops[i].substr(j + 1), layer)));
+			break;
+		case '&':
+			j = firstInte(ops[i]);
+			Stacks[layer].push(And(getVar(ops[i].substr(1, j), layer), getVar(ops[i].substr(j + 1), layer)));
+			break;
+		case '|':
+			j = firstInte(ops[i]);
+			Stacks[layer].push(Or(getVar(ops[i].substr(1, j), layer), getVar(ops[i].substr(j + 1), layer)));
+			break;
+		case '!':
+			j = firstInte(ops[i]);
+			Stacks[layer].push(Not(getVar(ops[i].substr(1), layer)));
+			break;
+		case 'I':
+			//TOOD::
+			break;
+		case 'O':
+			//TODO::
+			Print(getVar(ops[i].substr(1), layer));
+			break;
+			//待实现:-(负) +(正) in out
 		default:throw "Unknown error";
 		}
 	}
