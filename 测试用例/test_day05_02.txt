@@ -1,0 +1,23 @@
+int main(){
+	int a;
+	in a;
+	if a<0 {
+		a=-a;
+	}
+	else {
+		if a<=1 {
+			out 1;
+			return 0;
+		}
+	}
+	while a>1{
+		if a%2==0{
+			a=a/2;
+		}
+		else {
+			a= (a-1)/2;
+		}
+	}
+	out a;
+return 0;
+}
