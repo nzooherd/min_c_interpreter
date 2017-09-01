@@ -1,7 +1,0 @@
-int main()
-{
-	in a;
-	in "请输入高度:", h;
-	out a;
-	out "Helloworld\n", h;
-}
