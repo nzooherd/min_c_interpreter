@@ -1,0 +1,22 @@
+int main(){
+    int a;
+    a = f();
+    string s;
+    s = "";
+    int i;
+    i = 0;
+    while i < a{
+        if i%2 == 0{
+            s = s$"偶";
+        }
+        else{
+            s = s$"奇";
+        }
+    }
+    out 3,s$"\n";
+}
+int f(){
+    int a;
+    in a;
+    return a;
+}
